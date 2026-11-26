@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.1">
-<link rel="icon" type="image/png" href="favicon.png?v=2.1">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.2">
+<link rel="icon" type="image/png" href="favicon.png?v=2.2">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -161,6 +161,7 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <div class="linha"><span>Antecedência do comando</span><span id="mAtr"></span></div>
   <div class="linha"><span>ID do Inject</span><span><input id="mInjId" inputmode="numeric" maxlength="8"></span></div>
   <div class="linha"><span>Quando chegar do Inject</span><span><select id="mInjModo"><option value="auto">Revelar sozinho</option><option value="manual">Só preencher</option></select></span></div>
+  <div class="linha"><span>Link para o Hydra</span><span id="mHydra" style="font-size:11px;max-width:62%;word-break:break-all"></span></div>
   <div class="linha"><span>Leitura do Inject</span><span id="mInjTeste" style="font-size:12px;max-width:60%;word-break:break-all">—</span></div>
   <div class="bts">
     <button class="pri" id="mSalvar">Salvar código da sala</button>
@@ -168,15 +169,16 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
     <button id="mCopiar">Copiar link da plateia</button>
     <button id="mAbrir">Abrir página da plateia (teste)</button>
     <button id="mInjTestar">Testar leitura do Inject</button>
+    <button id="mHydraCopiar">Copiar link para o Hydra</button>
     <button id="mFechar">Fechar</button>
   </div>
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=2.1"></script>
+<script src="rede.js?v=2.2"></script>
 <script>
 (function(){
-var VERSAO = '2.1';
+var VERSAO = '2.2';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -217,7 +219,7 @@ var rede = Rede(SRV, function(tp, txt){
     // ao abrir o painel, recupera o último comando enviado
     if (recuperado || m.sent <= ultimoSent) return;
     recuperado = true; ultimoSent = m.sent;
-    ['mode','txt'].forEach(function(k){ if (m[k] !== undefined) est[k] = m[k]; });
+    ['mode','txt','rtxt','at','d1','d2','rcor','rvel'].forEach(function(k){ if (m[k] !== undefined) est[k] = m[k]; });
     $('txt').value = est.txt || ''; marcar();
   }
 }, function(i, ok){
@@ -419,6 +421,30 @@ setInterval(function(){
 }, 250);
 $('bInj').addEventListener('click', armarInject);
 
+/* ---------- revelação vinda do app Hydra (abre este painel com ?revelar=PALAVRA) ---------- */
+function linkHydra(){
+  var u = new URL('painel.html', location.href);
+  return u.origin + u.pathname + '?s=' + SALA + '&esp=' + REV.esp + '&d1=' + REV.d1 + '&d2=' + REV.d2 +
+         '&cor=' + encodeURIComponent(REV.cor) + '&revelar=';
+}
+(function(){
+  var palavra = q.get('revelar');
+  if (!palavra) return;
+  var esp = +(q.get('esp') || REV.esp), d1 = +(q.get('d1') || REV.d1), d2 = +(q.get('d2') || REV.d2), cor = q.get('cor') || REV.cor;
+  REV.d1 = d1; REV.d2 = d2; REV.cor = cor; marcarRCor();
+  $('rTxt').value = palavra;
+  // tira a palavra do endereço para não revelar de novo se a página recarregar
+  try { var u = new URL(location.href); u.searchParams.delete('revelar'); history.replaceState(null, '', u.href); } catch(e) {}
+  var inicioR = Date.now();
+  injStatus('Recebido do Hydra: "' + palavra + '". Conectando…');
+  (function esperarRede(){
+    if (rede.quantas() > 0 || Date.now() - inicioR > 8000) {
+      var gasto = Date.now() - inicioR;
+      revelar(palavra, Math.max(0, esp * 1000 - gasto));
+    } else setTimeout(esperarRede, 150);
+  })();
+})();
+
 /* ---------- menu de ajustes (dois dedos para baixo) ---------- */
 function abrirMenu(){
   $('mVer').textContent = 'v' + VERSAO;
@@ -426,6 +452,7 @@ function abrirMenu(){
   $('mLink').textContent = linkPlateia();
   $('mAtr').textContent = ATRASO + ' ms';
   $('mInjId').value = INJ.id; $('mInjModo').value = INJ.modo;
+  $('mHydra').textContent = linkHydra() + 'PALAVRA';
   pintarServidores();
   $('menu').hidden = false;
 }
@@ -446,6 +473,10 @@ $('mCopiar').addEventListener('click', function(){
 $('mAbrir').addEventListener('click', function(){ window.open(linkPlateia(), '_blank'); });
 $('mInjId').addEventListener('change', function(){ var v = this.value.replace(/\D/g, ''); if (v) { INJ.id = v; injVia = null; salvarInj(); aviso('ID do Inject salvo'); } });
 $('mInjModo').addEventListener('change', function(){ INJ.modo = this.value; salvarInj(); aviso(INJ.modo === 'auto' ? 'Vai revelar sozinho' : 'Só vai preencher'); });
+$('mHydraCopiar').addEventListener('click', function(){
+  var l = linkHydra();
+  (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function(){ aviso('Link do Hydra copiado'); }, function(){ aviso(l); });
+});
 $('mInjTestar').addEventListener('click', function(){
   var el = $('mInjTeste'); el.textContent = 'Lendo…'; injVia = null;
   lerInject().then(function(r){ el.textContent = 'OK (' + NOMES_VIA[injVia] + '): "' + r.value + '"'; },
