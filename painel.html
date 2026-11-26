@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.4">
-<link rel="icon" type="image/png" href="favicon.png?v=1.4">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.5">
+<link rel="icon" type="image/png" href="favicon.png?v=1.5">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -50,6 +50,13 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
 .msg input{flex:1;min-width:0;font:inherit;font-size:17px;padding:12px 14px;border-radius:12px;border:1px solid #263238;background:#000;color:#fff;-webkit-user-select:text;user-select:text}
 .msg button{padding:0 16px;border-radius:12px;font-weight:700;background:#00E5FF;color:#00151a}
 .msg button.lim{background:#263238;color:#fff}
+#bInj{width:100%;margin-top:10px;padding:14px;border-radius:12px;font-size:16px;font-weight:800;background:#1c252a;border:2px solid #2b3a42;color:#fff}
+#bInj.armado{border-color:#ffd400;color:#ffd400;box-shadow:0 0 16px rgba(255,212,0,.35);animation:armado 1.2s ease-in-out infinite}
+@keyframes armado{50%{box-shadow:0 0 4px rgba(255,212,0,.15)}}
+#injSt{font-size:13px;color:#78909c;margin-top:8px;min-height:17px}
+#injSt.erro{color:#ff5a5a}
+#menu select{font:inherit;font-size:15px;padding:8px;border-radius:10px;border:1px solid #263238;background:#000;color:#fff}
+#mInjId{letter-spacing:0!important;width:110px!important}
 .rodape{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
 .rodape .bt{font-size:15px}
 #aviso{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#00E5FF;color:#00151a;font-weight:700;padding:10px 18px;border-radius:22px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
@@ -113,6 +120,8 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
     <button id="bTxt">Enviar</button>
     <button id="bLimpa" class="lim">✕</button>
   </div>
+  <button id="bInj">⚡ Aguardar Inject</button>
+  <div id="injSt"></div>
 </div>
 
 <div class="rodape">
@@ -136,20 +145,24 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <div class="linha"><span>Link da plateia</span><span id="mLink" style="font-size:12px;word-break:break-all"></span></div>
   <div class="linha"><span>Servidores</span><span id="mSrv"></span></div>
   <div class="linha"><span>Antecedência do comando</span><span id="mAtr"></span></div>
+  <div class="linha"><span>ID do Inject</span><span><input id="mInjId" inputmode="numeric" maxlength="8"></span></div>
+  <div class="linha"><span>Quando chegar do Inject</span><span><select id="mInjModo"><option value="auto">Enviar na hora</option><option value="manual">Só preencher</option></select></span></div>
+  <div class="linha"><span>Leitura do Inject</span><span id="mInjTeste" style="font-size:12px;max-width:60%;word-break:break-all">—</span></div>
   <div class="bts">
     <button class="pri" id="mSalvar">Salvar código da sala</button>
     <button id="mNova">Gerar sala nova</button>
     <button id="mCopiar">Copiar link da plateia</button>
     <button id="mAbrir">Abrir página da plateia (teste)</button>
+    <button id="mInjTestar">Testar leitura do Inject</button>
     <button id="mFechar">Fechar</button>
   </div>
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=1.4"></script>
+<script src="rede.js?v=1.5"></script>
 <script>
 (function(){
-var VERSAO = '1.4';
+var VERSAO = '1.5';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -279,12 +292,86 @@ $('bQR').addEventListener('click', function(){
 });
 $('qr').addEventListener('click', function(){ $('qr').hidden = true; });
 
+/* ---------- Inject: a palavra do espectador vai para todas as telas ---------- */
+var INJ = {id: '17794', modo: 'auto'};
+try { var ij = JSON.parse(localStorage.getItem('luzes_inject') || '{}'); if (ij.id) INJ.id = ij.id; if (ij.modo) INJ.modo = ij.modo; } catch(e) {}
+function salvarInj(){ try { localStorage.setItem('luzes_inject', JSON.stringify(INJ)); } catch(e) {} }
+// 0 = direto; 1 e 2 = intermediários, só se o navegador bloquear a leitura direta
+var VIAS = [
+  function(u){ return u; },
+  function(u){ return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
+  function(u){ return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
+];
+var NOMES_VIA = ['direto', 'via corsproxy', 'via allorigins'];
+var injVia = null, injArmado = false, injBase = null, injTimer = null, injFalhas = 0;
+function urlInject(){ return 'https://11z.co/_w/' + INJ.id + '/selection?rc=-1&_=' + Date.now(); }
+function lerInject(){
+  var ordem = injVia !== null ? [injVia] : [0, 1, 2];
+  function tentar(i){
+    if (i >= ordem.length) { injVia = null; return Promise.reject(new Error('sem leitura')); }
+    var v = ordem[i], ctl = new AbortController(), t = setTimeout(function(){ ctl.abort(); }, 4000);
+    return fetch(VIAS[v](urlInject()), {cache: 'no-store', signal: ctl.signal}).then(function(r){
+      clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.text();
+    }).then(function(txt){ injVia = v; return interpretar(txt); }, function(){ clearTimeout(t); return tentar(i + 1); });
+  }
+  return tentar(0);
+}
+function interpretar(txt){
+  var j = null; try { j = JSON.parse(txt); } catch(e) {}
+  if (j && typeof j === 'object') {
+    var val = j.value !== undefined ? j.value : (j.selection !== undefined ? j.selection : '');
+    if (typeof val !== 'string') val = val == null ? '' : String(val);
+    return {count: j.count !== undefined ? String(j.count) : val, value: val.trim()};
+  }
+  txt = (txt || '').trim();
+  return {count: txt, value: txt};
+}
+function injStatus(t, erro){ var e = $('injSt'); e.textContent = t; e.className = erro ? 'erro' : ''; }
+function armarInject(){
+  if (injArmado) { desarmar('Cancelado'); return; }
+  injArmado = true; injBase = null; injFalhas = 0;
+  $('bInj').classList.add('armado'); $('bInj').textContent = '⚡ Aguardando o Inject… (toque para cancelar)';
+  injStatus('Conectando ao Inject ' + INJ.id + '…');
+  ciclo();
+}
+function desarmar(msg){
+  injArmado = false; clearTimeout(injTimer);
+  $('bInj').classList.remove('armado'); $('bInj').textContent = '⚡ Aguardar Inject';
+  if (msg) injStatus(msg);
+}
+function ciclo(){
+  if (!injArmado) return;
+  lerInject().then(function(r){
+    if (!injArmado) return;
+    injFalhas = 0;
+    if (injBase === null) { injBase = r.count; injStatus('Pronto (' + NOMES_VIA[injVia] + '). Esperando o espectador…'); }
+    else if (r.count !== injBase && r.value) {
+      recebido(r.value); return;
+    }
+    injTimer = setTimeout(ciclo, 1000);
+  }, function(){
+    if (!injArmado) return;
+    injFalhas++;
+    injStatus('Não consegui ler o Inject (tentativa ' + injFalhas + ')', true);
+    injTimer = setTimeout(ciclo, 2000);
+  });
+}
+function recebido(valor){
+  valor = valor.slice(0, 80);
+  $('txt').value = valor;
+  desarmar();
+  if (INJ.modo === 'auto') { enviar({txt: valor}, 'Inject: ' + valor); injStatus('Enviado para todos: "' + valor + '"'); }
+  else { aviso('Chegou do Inject: ' + valor); injStatus('Recebido: "' + valor + '". Toque em Enviar para revelar.'); }
+}
+$('bInj').addEventListener('click', armarInject);
+
 /* ---------- menu de ajustes (dois dedos para baixo) ---------- */
 function abrirMenu(){
   $('mVer').textContent = 'v' + VERSAO;
   $('mSala').value = SALA;
   $('mLink').textContent = linkPlateia();
   $('mAtr').textContent = ATRASO + ' ms';
+  $('mInjId').value = INJ.id; $('mInjModo').value = INJ.modo;
   pintarServidores();
   $('menu').hidden = false;
 }
@@ -303,6 +390,13 @@ $('mCopiar').addEventListener('click', function(){
   (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function(){ aviso('Link copiado'); }, function(){ aviso(l); });
 });
 $('mAbrir').addEventListener('click', function(){ window.open(linkPlateia(), '_blank'); });
+$('mInjId').addEventListener('change', function(){ var v = this.value.replace(/\D/g, ''); if (v) { INJ.id = v; injVia = null; salvarInj(); aviso('ID do Inject salvo'); } });
+$('mInjModo').addEventListener('change', function(){ INJ.modo = this.value; salvarInj(); aviso(INJ.modo === 'auto' ? 'Vai enviar na hora' : 'Só vai preencher'); });
+$('mInjTestar').addEventListener('click', function(){
+  var el = $('mInjTeste'); el.textContent = 'Lendo…'; injVia = null;
+  lerInject().then(function(r){ el.textContent = 'OK (' + NOMES_VIA[injVia] + '): "' + r.value + '"'; },
+                   function(){ el.textContent = 'Falhou: o navegador não conseguiu ler'; });
+});
 
 document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') rede.acordar(); });
 marcar();
