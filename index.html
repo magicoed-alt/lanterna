@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.3">
-<link rel="icon" type="image/png" href="favicon.png?v=1.3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.4">
+<link rel="icon" type="image/png" href="favicon.png?v=1.4">
 <title>Eduardo Braz · Digital Magic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -43,9 +43,9 @@ p b{color:#fff}
 <video id="cam" playsinline muted autoplay></video>
 
 <section id="entrada">
-  <img class="logo" src="logo.png?v=1.3" alt="Eduardo Braz · Digital Magic">
+  <img class="logo" src="logo.png?v=1.4" alt="Eduardo Braz · Digital Magic">
   <h1>Faça parte do show</h1>
-  <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada: serve só para o show acender a lanterna do seu celular.</p>
+  <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada, serve apenas para você participar da experiência.</p>
   <button id="btEntrar">PARTICIPAR</button>
   <p class="peq">Deixe esta página aberta e a tela ligada.</p>
 </section>
@@ -77,10 +77,10 @@ p b{color:#fff}
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.3"></script>
+<script src="rede.js?v=1.4"></script>
 <script>
 (function(){
-var VERSAO = '1.3';
+var VERSAO = '1.4';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
