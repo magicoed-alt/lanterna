@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.9">
-<link rel="icon" type="image/png" href="favicon.png?v=1.9">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.0">
+<link rel="icon" type="image/png" href="favicon.png?v=2.0">
 <title>Eduardo Braz · Digital Magic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -31,6 +31,14 @@ p b{color:#fff}
 #txt{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.05;pointer-events:none}
 #txtIn{display:inline-block;max-width:90vw;white-space:pre-wrap;word-break:normal;overflow-wrap:normal;hyphens:none;-webkit-hyphens:none}
 #voltar{background:rgba(0,0,0,.85);z-index:5}
+#fim{background:radial-gradient(120% 80% at 50% 30%,#0d2730 0%,#000 70%);z-index:4}
+#fim .fimT{font-size:27px;font-weight:800;margin:34px 0 12px}
+#fim p{font-size:17px}
+.ig{display:block;margin-top:30px;padding:3px;border-radius:26px;text-decoration:none;color:#fff;background:linear-gradient(45deg,#f9a825,#ff3d3d 35%,#d6249f 60%,#7b3fe4);box-shadow:0 10px 40px rgba(214,36,159,.35);animation:igPulsa 2.2s ease-in-out infinite}
+.ig .igAt{display:block;background:#000;border-radius:23px 23px 0 0;padding:20px 30px 10px;font-size:24px;font-weight:800;letter-spacing:.3px}
+.ig .igBt{display:block;background:#000;border-radius:0 0 23px 23px;padding:6px 30px 20px;font-size:14px;font-weight:800;letter-spacing:2.5px;color:#00E5FF}
+.ig:active{transform:scale(.97)}
+@keyframes igPulsa{50%{box-shadow:0 10px 50px rgba(0,229,255,.35)}}
 #voltar button{font:inherit;font-size:19px;font-weight:800;color:#00151a;background:#00E5FF;border:0;border-radius:40px;padding:19px 40px;margin-top:22px}
 #menu{z-index:9;background:rgba(10,14,16,.96);justify-content:flex-start;text-align:left;align-items:stretch;padding-top:calc(40px + env(safe-area-inset-top))}
 #menu h3{font-size:20px;margin-bottom:18px;color:#00E5FF}
@@ -44,7 +52,7 @@ p b{color:#fff}
 <video id="cam" playsinline muted autoplay></video>
 
 <section id="entrada">
-  <img class="logo" src="logo.png?v=1.9" alt="Eduardo Braz · Digital Magic">
+  <img class="logo" src="logo.png?v=2.0" alt="Eduardo Braz · Digital Magic">
   <h1>Faça parte do show</h1>
   <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada, serve apenas para você participar da experiência.</p>
   <button id="btEntrar">PARTICIPAR</button>
@@ -59,6 +67,16 @@ p b{color:#fff}
 </section>
 
 <div id="txt" hidden></div>
+
+<section id="fim" hidden>
+  <img class="logo" src="logo.png?v=2.0" alt="Eduardo Braz · Digital Magic">
+  <h2 class="fimT">Obrigado por participar!</h2>
+  <p>Gostou da mágica? Então apoie meu trabalho me seguindo no Instagram.</p>
+  <a class="ig" href="https://www.instagram.com/eduardobrazmagic?cnvx=MWtiN2t3MTdocXBhaw%3D%3D&amp;utm_source=qr" target="_blank" rel="noopener">
+    <span class="igAt">@eduardobrazmagic</span>
+    <span class="igBt">SEGUIR NO INSTAGRAM</span>
+  </a>
+</section>
 
 <section id="voltar" hidden>
   <p>O show pausou no seu celular.</p>
@@ -85,10 +103,10 @@ p b{color:#fff}
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.9"></script>
+<script src="rede.js?v=2.0"></script>
 <script>
 (function(){
-var VERSAO = '1.9';
+var VERSAO = '2.0';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
@@ -100,7 +118,7 @@ var meuId;
 try { meuId = localStorage.getItem('luzes_id'); } catch(e) {}
 if (!meuId) { meuId = Math.random().toString(36).slice(2, 10); try { localStorage.setItem('luzes_id', meuId); } catch(e) {} }
 
-var NOMES = {revela:'Revelação', off:'Apagado', on:'Aceso', blink:'Piscar', strobe:'Estrobo', sparkle:'Cintilar', fadein:'Acender aos poucos', fadeout:'Apagar aos poucos'};
+var NOMES = {fim:'Encerrado', revela:'Revelação', off:'Apagado', on:'Aceso', blink:'Piscar', strobe:'Estrobo', sparkle:'Cintilar', fadein:'Acender aos poucos', fadeout:'Apagar aos poucos'};
 var est = {mode:'off', sent:0, at:0, speed:500, color:'auto', txt:'', dur:4};
 var anterior = est;
 var entrou = false, temLanterna = false, lanternaAntes = false;
@@ -172,6 +190,7 @@ function calc(e, t){
 // O que este celular deve mostrar agora (lanterna, cor da tela, texto)
 function quadro(){
   var t = agora(), e = t < (est.at || 0) ? anterior : est;
+  if (e.mode === 'fim') return {e: e, luz: false, txt: ''};
   if (e.mode === 'revela') {
     // Revelação: 1) lanterna acesa, fixa  2) LED piscando forte  3) tela piscando com a palavra
     var dt = t - (e.at || 0), d1 = (e.d1 || 6) * 1000, d2 = (e.d2 || 6) * 1000;
@@ -282,7 +301,20 @@ function pararCamera(){
 }
 
 /* ---------- tela ---------- */
-var piscadaAte = 0;
+var piscadaAte = 0, ultFim = false;
+// Fim do show: desliga a câmera (some o aviso verde) e libera a tela para apagar
+function encerrar(){
+  lanQuer = false;
+  var desligar = function(){ pararCamera(); };
+  if (track && temLanterna && lanEsta) track.applyConstraints({advanced: [{torch: false}]}).then(desligar, desligar); else desligar();
+  try { if (wake) { wake.release(); wake = null; } } catch(e) {}
+}
+// Se o painel mandar outro efeito depois do fim, tenta religar a câmera
+function retomar(){
+  if (!entrou || !lanternaAntes || (track && track.readyState === 'live')) return;
+  pedirWake();
+  ligarCamera().then(function(ok){ if (!ok) pararCamera(); }).catch(function(){ $('voltar').hidden = false; });
+}
 var ultBg = '', ultTxt = null, ultLuz = null, ultPronto = null;
 function corClara(c){
   c = c.replace('#', ''); if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
@@ -325,6 +357,8 @@ function atualizarTela(forcar){
   }
   if (txt) $('txt').style.color = corClara(bg) ? '#000' : '#fff';
 
+  var fim = f.e.mode === 'fim';
+  if (fim !== ultFim) { ultFim = fim; $('fim').hidden = !fim; if (fim) encerrar(); else retomar(); }
   var pronto = !luz && !txt && !f.bg && f.e.mode === 'off';
   if (pronto !== ultPronto) { $('pronto').hidden = !pronto; ultPronto = pronto; }
   if (luz !== ultLuz || forcar) { ultLuz = luz; $('stModo').textContent = temLanterna ? 'Lanterna pronta' : 'Sua tela vai acender'; }

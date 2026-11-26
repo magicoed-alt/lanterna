@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.9">
-<link rel="icon" type="image/png" href="favicon.png?v=1.9">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.0">
+<link rel="icon" type="image/png" href="favicon.png?v=2.0">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -171,10 +171,10 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=1.9"></script>
+<script src="rede.js?v=2.0"></script>
 <script>
 (function(){
-var VERSAO = '1.9';
+var VERSAO = '2.0';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -303,7 +303,7 @@ $('bTeste').addEventListener('click', function(){
 $('bTxt').addEventListener('click', function(){ enviar({txt: $('txt').value.trim()}, 'Mensagem enviada'); $('txt').blur(); });
 $('txt').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('bTxt').click(); });
 $('bLimpa').addEventListener('click', function(){ $('txt').value = ''; enviar({txt: ''}, 'Mensagem apagada'); });
-$('bFim').addEventListener('click', function(){ $('txt').value = ''; enviar({mode: 'off', txt: ''}, 'Tudo apagado'); });
+$('bFim').addEventListener('click', function(){ $('txt').value = ''; enviar({mode: 'fim', txt: ''}, 'Show encerrado: agradecimento na tela'); });
 
 $('bQR').addEventListener('click', function(){
   var l = linkPlateia();
