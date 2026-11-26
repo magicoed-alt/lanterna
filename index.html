@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.5">
-<link rel="icon" type="image/png" href="favicon.png?v=1.5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.6">
+<link rel="icon" type="image/png" href="favicon.png?v=1.6">
 <title>Eduardo Braz · Digital Magic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -43,7 +43,7 @@ p b{color:#fff}
 <video id="cam" playsinline muted autoplay></video>
 
 <section id="entrada">
-  <img class="logo" src="logo.png?v=1.5" alt="Eduardo Braz · Digital Magic">
+  <img class="logo" src="logo.png?v=1.6" alt="Eduardo Braz · Digital Magic">
   <h1>Faça parte do show</h1>
   <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada, serve apenas para você participar da experiência.</p>
   <button id="btEntrar">PARTICIPAR</button>
@@ -77,10 +77,10 @@ p b{color:#fff}
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.5"></script>
+<script src="rede.js?v=1.6"></script>
 <script>
 (function(){
-var VERSAO = '1.5';
+var VERSAO = '1.6';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
@@ -92,7 +92,7 @@ var meuId;
 try { meuId = localStorage.getItem('luzes_id'); } catch(e) {}
 if (!meuId) { meuId = Math.random().toString(36).slice(2, 10); try { localStorage.setItem('luzes_id', meuId); } catch(e) {} }
 
-var NOMES = {off:'Apagado', on:'Aceso', blink:'Piscar', strobe:'Estrobo', sparkle:'Cintilar', fadein:'Acender aos poucos', fadeout:'Apagar aos poucos'};
+var NOMES = {revela:'Revelação', off:'Apagado', on:'Aceso', blink:'Piscar', strobe:'Estrobo', sparkle:'Cintilar', fadein:'Acender aos poucos', fadeout:'Apagar aos poucos'};
 var est = {mode:'off', sent:0, at:0, speed:500, color:'auto', txt:'', dur:4};
 var anterior = est;
 var entrou = false, temLanterna = false, lanternaAntes = false;
@@ -113,6 +113,7 @@ var rede = Rede(SRV, function(tp, txt, retido){
 }, function(){ atualizarMenu(); });
 rede.inscrever(BASE + 'est');
 rede.inscrever(BASE + 'rel');
+aoVoltar(rede);
 
 // Acerta o relógio pelo do painel (para todos piscarem juntos)
 function amostra(tPainel){
@@ -143,11 +144,20 @@ function calc(e, t){
     default: return false;
   }
 }
-function querLuz(){
-  var t = agora();
-  if (t < (est.at || 0)) return calc(anterior, t);
-  return calc(est, t);
+// O que este celular deve mostrar agora (lanterna, cor da tela, texto)
+function quadro(){
+  var t = agora(), e = t < (est.at || 0) ? anterior : est;
+  if (e.mode === 'revela') {
+    // Revelação: 1) acende aos poucos  2) LED piscando forte  3) tela piscando com a palavra
+    var dt = t - (e.at || 0), d1 = (e.d1 || 6) * 1000, d2 = (e.d2 || 6) * 1000;
+    if (dt < d1) return {e: e, luz: dt >= rnd('d') * d1 * 0.85, txt: ''};
+    if (dt < d1 + d2) return {e: e, luz: Math.floor((dt - d1) / 110) % 2 === 0, txt: ''};
+    var aceso = Math.floor((dt - d1 - d2) / (e.rvel || 450)) % 2 === 0;
+    return {e: e, luz: false, bg: aceso ? (e.rcor || '#0057ff') : '#000000', txt: e.rtxt || ''};
+  }
+  return {e: e, luz: calc(e, t), txt: e.txt || ''};
 }
+function querLuz(){ return quadro().luz; }
 
 /* ---------- lanterna ---------- */
 var lanQuer = false, lanEsta = null, lanOcupada = false, lanFalhas = 0;
@@ -250,14 +260,14 @@ function corClara(c){
 }
 function atualizarTela(forcar){
   if (!entrou) return;
-  var luz = querLuz();
+  var f = quadro(), luz = f.luz;
   if (temLanterna) lanterna(luz || Date.now() < piscadaAte);
-  var temCor = est.color && est.color !== 'auto';
+  var temCor = f.e.mode !== 'revela' && f.e.color && f.e.color !== 'auto';
   var acesa = luz && (!temLanterna || temCor);
-  var bg = acesa ? (temCor ? est.color : '#ffffff') : '#000000';
+  var bg = f.bg || (acesa ? (temCor ? f.e.color : '#ffffff') : '#000000');
   if (bg !== ultBg) { $('bg').style.background = bg; ultBg = bg; }
 
-  var txt = est.txt || '';
+  var txt = f.txt;
   if (txt !== ultTxt || forcar) {
     ultTxt = txt;
     var el = $('txt');
@@ -272,7 +282,7 @@ function atualizarTela(forcar){
   }
   if (txt) $('txt').style.color = corClara(bg) ? '#000' : '#fff';
 
-  var pronto = !luz && !txt && est.mode === 'off';
+  var pronto = !luz && !txt && !f.bg && f.e.mode === 'off';
   if (pronto !== ultPronto) { $('pronto').hidden = !pronto; ultPronto = pronto; }
   if (luz !== ultLuz || forcar) { ultLuz = luz; $('stModo').textContent = temLanterna ? 'Lanterna pronta' : 'Sua tela vai acender'; }
 }
@@ -298,6 +308,9 @@ $('btEntrar').addEventListener('click', function(){
 });
 function entrar(comLanterna){
   entrou = true;
+  // quem entra começa com a tela preta; só vale o próximo comando do painel
+  est = {mode: 'off', sent: est.sent, at: 0, speed: 500, color: 'auto', txt: '', dur: 4};
+  anterior = est;
   $('entrada').hidden = true; ultPronto = null;
   rede.publicar(BASE + 'oi', meuId + ',' + (comLanterna ? 1 : 0), false);
   // piscadinha de confirmação
@@ -307,7 +320,6 @@ function entrar(comLanterna){
 
 document.addEventListener('visibilitychange', function(){
   if (document.visibilityState !== 'visible') return;
-  rede.acordar();
   if (!entrou) return;
   pedirWake();
   if (lanternaAntes && (!track || track.readyState !== 'live')) {

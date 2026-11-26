@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.5">
-<link rel="icon" type="image/png" href="favicon.png?v=1.5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.6">
+<link rel="icon" type="image/png" href="favicon.png?v=1.6">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -120,6 +120,18 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
     <button id="bTxt">Enviar</button>
     <button id="bLimpa" class="lim">✕</button>
   </div>
+</div>
+
+<div class="caixa" id="cxRev">
+  <h2>Revelação do Inject</h2>
+  <div class="slider"><label>Esperar</label><input id="rEsp" type="range" min="0" max="30" step="1" value="3"><output id="rEspO">3 s</output></div>
+  <div class="slider"><label>Acender</label><input id="rD1" type="range" min="2" max="20" step="1" value="6"><output id="rD1O">6 s</output></div>
+  <div class="slider"><label>Piscar forte</label><input id="rD2" type="range" min="2" max="20" step="1" value="6"><output id="rD2O">6 s</output></div>
+  <div class="cores" id="rCores" style="margin:12px 0"></div>
+  <div class="msg">
+    <input id="rTxt" type="text" maxlength="80" placeholder="Palavra (vem do Inject)" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button id="bRev">▶ Revelar</button>
+  </div>
   <button id="bInj">⚡ Aguardar Inject</button>
   <div id="injSt"></div>
 </div>
@@ -146,7 +158,7 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <div class="linha"><span>Servidores</span><span id="mSrv"></span></div>
   <div class="linha"><span>Antecedência do comando</span><span id="mAtr"></span></div>
   <div class="linha"><span>ID do Inject</span><span><input id="mInjId" inputmode="numeric" maxlength="8"></span></div>
-  <div class="linha"><span>Quando chegar do Inject</span><span><select id="mInjModo"><option value="auto">Enviar na hora</option><option value="manual">Só preencher</option></select></span></div>
+  <div class="linha"><span>Quando chegar do Inject</span><span><select id="mInjModo"><option value="auto">Revelar sozinho</option><option value="manual">Só preencher</option></select></span></div>
   <div class="linha"><span>Leitura do Inject</span><span id="mInjTeste" style="font-size:12px;max-width:60%;word-break:break-all">—</span></div>
   <div class="bts">
     <button class="pri" id="mSalvar">Salvar código da sala</button>
@@ -159,10 +171,10 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=1.5"></script>
+<script src="rede.js?v=1.6"></script>
 <script>
 (function(){
-var VERSAO = '1.5';
+var VERSAO = '1.6';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -192,19 +204,25 @@ var est = {mode:'off', speed:500, dur:4, color:'auto', txt:''};
 try { var salvo = JSON.parse(localStorage.getItem('luzes_ajustes') || '{}'); if (salvo.speed) est.speed = salvo.speed; if (salvo.dur) est.dur = salvo.dur; if (salvo.color) est.color = salvo.color; } catch(e) {}
 
 /* ---------- rede ---------- */
-var vistos = {}, recuperado = false, ultimoSent = 0;
+var vistos = {}, recuperado = false, ultimoSent = 0, pendente = null;
 var rede = Rede(SRV, function(tp, txt){
   if (tp === BASE + 'oi') {
     var p = txt.split(','); if (p[0]) vistos[p[0]] = {t: Date.now(), l: p[1] === '1'};
-  } else if (tp === BASE + 'est' && !recuperado) {
-    // ao abrir o painel, recupera o último comando enviado
+  } else if (tp === BASE + 'est') {
     var m; try { m = JSON.parse(txt); } catch(e) { return; }
-    if (!m || !m.sent || m.sent <= ultimoSent) return;
+    if (!m || !m.sent) return;
+    if (pendente && m.sent === pendente) { pendente = null; }   // o servidor confirmou o envio
+    // ao abrir o painel, recupera o último comando enviado
+    if (recuperado || m.sent <= ultimoSent) return;
     recuperado = true; ultimoSent = m.sent;
     ['mode','txt'].forEach(function(k){ if (m[k] !== undefined) est[k] = m[k]; });
     $('txt').value = est.txt || ''; marcar();
   }
-}, function(){ pintarServidores(); });
+}, function(i, ok){
+  pintarServidores();
+  // reconectou e ainda há comando sem confirmação: manda de novo
+  if (ok && pendente) rede.conexoes[i].publicar(BASE + 'est', JSON.stringify(est), true);
+});
 rede.inscrever(BASE + 'oi');
 rede.inscrever(BASE + 'est');
 setTimeout(function(){ recuperado = true; }, 4000);
@@ -228,15 +246,18 @@ function contar(){
 }
 setInterval(contar, 2000);
 
-function enviar(mud, msgOk){
+function enviar(mud, msgOk, extraMs){
   for (var k in mud) est[k] = mud[k];
   var t = Date.now(); if (t <= ultimoSent) t = ultimoSent + 1; ultimoSent = t;
-  est.sent = t; est.at = t + ATRASO;
+  est.sent = t; est.at = t + ATRASO + (extraMs || 0);
+  pendente = t;
   var n = rede.publicar(BASE + 'est', JSON.stringify(est), true);
   try { localStorage.setItem('luzes_ajustes', JSON.stringify({speed: est.speed, dur: est.dur, color: est.color})); } catch(e) {}
   marcar();
-  if (n === 0) aviso('Sem conexão com a internet!', true);
+  if (n === 0) { aviso('Reconectando…', true); rede.acordar(true); }
   else if (msgOk) aviso(msgOk);
+  // se em 1,5 s nenhum servidor devolver o comando, a conexão estava morta: reconecta e reenvia
+  setTimeout(function(){ if (pendente === t) { aviso('Reconectando e reenviando…', true); rede.acordar(true); } }, 1500);
 }
 
 /* ---------- interface ---------- */
@@ -247,7 +268,7 @@ function aviso(t, erro){
 }
 function marcar(){
   document.querySelectorAll('[data-m]').forEach(function(b){ b.classList.toggle('ativo', b.dataset.m === est.mode); });
-  document.querySelectorAll('.cor').forEach(function(b){ b.classList.toggle('ativo', b.dataset.c === est.color); });
+  document.querySelectorAll('#cores .cor').forEach(function(b){ b.classList.toggle('ativo', b.dataset.c === est.color); });
 }
 document.querySelectorAll('[data-m]').forEach(function(b){
   b.addEventListener('click', function(){ enviar({mode: b.dataset.m}); });
@@ -259,7 +280,7 @@ CORES.forEach(function(c){
                         : '<button class="cor" data-c="' + c + '" style="background:' + c + '"></button>';
 });
 $('cores').innerHTML = cHtml;
-document.querySelectorAll('.cor').forEach(function(b){
+document.querySelectorAll('#cores .cor').forEach(function(b){
   b.addEventListener('click', function(){ enviar({color: b.dataset.c}); });
 });
 
@@ -358,11 +379,41 @@ function ciclo(){
 }
 function recebido(valor){
   valor = valor.slice(0, 80);
-  $('txt').value = valor;
+  $('rTxt').value = valor;
   desarmar();
-  if (INJ.modo === 'auto') { enviar({txt: valor}, 'Inject: ' + valor); injStatus('Enviado para todos: "' + valor + '"'); }
-  else { aviso('Chegou do Inject: ' + valor); injStatus('Recebido: "' + valor + '". Toque em Enviar para revelar.'); }
+  if (INJ.modo === 'auto') revelar(valor, REV.esp * 1000);
+  else { aviso('Chegou: ' + valor); injStatus('Recebido: "' + valor + '". Toque em ▶ Revelar.'); }
 }
+
+/* ---------- sequência de revelação ---------- */
+var REV = {esp: 3, d1: 6, d2: 6, cor: '#0057ff'};
+try { var rv = JSON.parse(localStorage.getItem('luzes_rev') || '{}'); for (var k in rv) REV[k] = rv[k]; } catch(e) {}
+function salvarRev(){ try { localStorage.setItem('luzes_rev', JSON.stringify(REV)); } catch(e) {} }
+function revelar(valor, esperaMs){
+  valor = (valor || '').trim();
+  if (!valor) { aviso('Escreva a palavra', true); return; }
+  enviar({mode: 'revela', rtxt: valor, d1: REV.d1, d2: REV.d2, rcor: REV.cor, rvel: 450, txt: ''}, null, esperaMs || 0);
+}
+$('bRev').addEventListener('click', function(){ $('rTxt').blur(); revelar($('rTxt').value, 0); });
+$('rTxt').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('bRev').click(); });
+[['rEsp','esp'],['rD1','d1'],['rD2','d2']].forEach(function(p){
+  var el = $(p[0]); el.value = REV[p[1]]; $(p[0] + 'O').textContent = REV[p[1]] + ' s';
+  el.addEventListener('input', function(){ REV[p[1]] = +this.value; $(p[0] + 'O').textContent = this.value + ' s'; salvarRev(); });
+});
+var RCORES = ['#0057ff','#00E5FF','#ff1a1a','#ffffff','#19e05a','#a020f0','#ffd400'];
+$('rCores').innerHTML = RCORES.map(function(c){ return '<button class="cor rcor" data-rc="' + c + '" style="background:' + c + '"></button>'; }).join('');
+function marcarRCor(){ document.querySelectorAll('.rcor').forEach(function(b){ b.classList.toggle('ativo', b.dataset.rc === REV.cor); }); }
+document.querySelectorAll('.rcor').forEach(function(b){ b.addEventListener('click', function(){ REV.cor = b.dataset.rc; salvarRev(); marcarRCor(); }); });
+marcarRCor();
+// acompanha a sequência no painel
+setInterval(function(){
+  if (est.mode !== 'revela' || injArmado) return;
+  var dt = Date.now() - est.at, d1 = est.d1 * 1000, d2 = est.d2 * 1000;
+  if (dt < 0) injStatus('Revelando "' + est.rtxt + '" em ' + Math.ceil(-dt / 1000) + ' s…');
+  else if (dt < d1) injStatus('1/3 · Acendendo aos poucos…');
+  else if (dt < d1 + d2) injStatus('2/3 · LED piscando forte…');
+  else injStatus('3/3 · Revelado nas telas: "' + est.rtxt + '"');
+}, 250);
 $('bInj').addEventListener('click', armarInject);
 
 /* ---------- menu de ajustes (dois dedos para baixo) ---------- */
@@ -391,14 +442,14 @@ $('mCopiar').addEventListener('click', function(){
 });
 $('mAbrir').addEventListener('click', function(){ window.open(linkPlateia(), '_blank'); });
 $('mInjId').addEventListener('change', function(){ var v = this.value.replace(/\D/g, ''); if (v) { INJ.id = v; injVia = null; salvarInj(); aviso('ID do Inject salvo'); } });
-$('mInjModo').addEventListener('change', function(){ INJ.modo = this.value; salvarInj(); aviso(INJ.modo === 'auto' ? 'Vai enviar na hora' : 'Só vai preencher'); });
+$('mInjModo').addEventListener('change', function(){ INJ.modo = this.value; salvarInj(); aviso(INJ.modo === 'auto' ? 'Vai revelar sozinho' : 'Só vai preencher'); });
 $('mInjTestar').addEventListener('click', function(){
   var el = $('mInjTeste'); el.textContent = 'Lendo…'; injVia = null;
   lerInject().then(function(r){ el.textContent = 'OK (' + NOMES_VIA[injVia] + '): "' + r.value + '"'; },
                    function(){ el.textContent = 'Falhou: o navegador não conseguiu ler'; });
 });
 
-document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') rede.acordar(); });
+aoVoltar(rede);
 marcar();
 window.__painel = {est: est, sala: SALA, rede: rede};
 })();

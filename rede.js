@@ -41,6 +41,7 @@
     };
     ws.onmessage = function (e) {
       if (ws !== s.ws) return;
+      s.ultRx = Date.now();
       s.buf = juntar(s.buf, new Uint8Array(e.data)); s.ler();
     };
     ws.onclose = ws.onerror = function () { if (ws === s.ws) s.cair(); };
@@ -61,8 +62,10 @@
     s.espera = Math.min(s.espera * 2, 8000);
   };
   // chamado quando a página volta a aparecer: reconecta na hora se caiu
-  Conexao.prototype.acordar = function () {
-    if (!this.ws || this.ws.readyState > 1) { this.espera = 800; this.cair(); clearTimeout(this.tRe); this.abrir(); }
+  Conexao.prototype.acordar = function (forcar) {
+    if (forcar || !this.ws || this.ws.readyState > 1 || Date.now() - (this.ultRx || 0) > 20000) {
+      this.espera = 300; this.cair(); clearTimeout(this.tRe); this.abrir();
+    }
   };
   Conexao.prototype.ler = function () {
     var s = this;
@@ -87,7 +90,11 @@
       s.ok = true; s.espera = 800; s.aoEstado(true);
       s.topicos.forEach(function (tp) { s.mandarInscricao(tp); });
       clearInterval(s.tPing);
-      s.tPing = setInterval(function () { s.enviar(new Uint8Array([0xC0, 0])); }, 15000);
+      s.ultRx = Date.now();
+      s.tPing = setInterval(function () {
+        if (Date.now() - s.ultRx > 20000) { s.espera = 300; s.cair(); return; }
+        s.enviar(new Uint8Array([0xC0, 0]));
+      }, 8000);
     } else if (t === 3) { // PUBLISH
       var qos = (tipo >> 1) & 3, ret = tipo & 1;
       var tl = (c[0] << 8) | c[1];
@@ -131,9 +138,20 @@
       publicar: function (tp, txt, reter) {
         var n = 0; cons.forEach(function (c) { if (c.publicar(tp, txt, reter)) n++; }); return n;
       },
-      acordar: function () { cons.forEach(function (c) { c.acordar(); }); },
+      acordar: function (forcar) { cons.forEach(function (c) { c.acordar(forcar); }); },
       quantas: function () { return cons.filter(function (c) { return c.ok; }).length; }
     };
+  };
+
+  // Ao voltar do segundo plano, o iPhone pode ter matado a conexão sem avisar: reconecta na hora.
+  window.aoVoltar = function (rede) {
+    var saiu = 0;
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') { saiu = Date.now(); return; }
+      rede.acordar(saiu && Date.now() - saiu > 2000);
+    });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) rede.acordar(true); });
+    window.addEventListener('online', function () { rede.acordar(true); });
   };
 
   // Gesto padrão dos apps do Eduardo: dois dedos arrastando para baixo abre o menu.
