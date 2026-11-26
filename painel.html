@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.8">
-<link rel="icon" type="image/png" href="favicon.png?v=1.8">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.9">
+<link rel="icon" type="image/png" href="favicon.png?v=1.9">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -125,7 +125,7 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
 <div class="caixa" id="cxRev">
   <h2>Revelação do Inject</h2>
   <div class="slider"><label>Esperar</label><input id="rEsp" type="range" min="0" max="30" step="1" value="3"><output id="rEspO">3 s</output></div>
-  <div class="slider"><label>Acender</label><input id="rD1" type="range" min="2" max="20" step="1" value="6"><output id="rD1O">6 s</output></div>
+  <div class="slider"><label>Acesa</label><input id="rD1" type="range" min="2" max="20" step="1" value="6"><output id="rD1O">6 s</output></div>
   <div class="slider"><label>Piscar forte</label><input id="rD2" type="range" min="2" max="20" step="1" value="6"><output id="rD2O">6 s</output></div>
   <div class="cores" id="rCores" style="margin:12px 0"></div>
   <div class="msg">
@@ -171,10 +171,10 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=1.8"></script>
+<script src="rede.js?v=1.9"></script>
 <script>
 (function(){
-var VERSAO = '1.8';
+var VERSAO = '1.9';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -410,7 +410,7 @@ setInterval(function(){
   if (est.mode !== 'revela' || injArmado) return;
   var dt = Date.now() - est.at, d1 = est.d1 * 1000, d2 = est.d2 * 1000;
   if (dt < 0) injStatus('Revelando "' + est.rtxt + '" em ' + Math.ceil(-dt / 1000) + ' s…');
-  else if (dt < d1) injStatus('1/3 · Acendendo aos poucos…');
+  else if (dt < d1) injStatus('1/3 · Lanternas acesas…');
   else if (dt < d1 + d2) injStatus('2/3 · LED piscando forte…');
   else injStatus('3/3 · Revelado nas telas: "' + est.rtxt + '"');
 }, 250);
