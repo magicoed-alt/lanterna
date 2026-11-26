@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.7">
-<link rel="icon" type="image/png" href="favicon.png?v=1.7">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.8">
+<link rel="icon" type="image/png" href="favicon.png?v=1.8">
 <title>Eduardo Braz · Digital Magic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -28,7 +28,8 @@ p b{color:#fff}
 @keyframes pulsa{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1.05)}}
 #pronto h2{font-size:23px;font-weight:800;margin-bottom:12px}
 #stModo{margin-top:22px;font-size:13px;color:#607d8b}
-#txt{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;font-weight:800;line-height:1.05;word-break:break-word;white-space:pre-wrap;pointer-events:none}
+#txt{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-weight:800;line-height:1.05;pointer-events:none}
+#txtIn{display:inline-block;max-width:90vw;white-space:pre-wrap;word-break:normal;overflow-wrap:normal;hyphens:none;-webkit-hyphens:none}
 #voltar{background:rgba(0,0,0,.85);z-index:5}
 #voltar button{font:inherit;font-size:19px;font-weight:800;color:#00151a;background:#00E5FF;border:0;border-radius:40px;padding:19px 40px;margin-top:22px}
 #menu{z-index:9;background:rgba(10,14,16,.96);justify-content:flex-start;text-align:left;align-items:stretch;padding-top:calc(40px + env(safe-area-inset-top))}
@@ -43,7 +44,7 @@ p b{color:#fff}
 <video id="cam" playsinline muted autoplay></video>
 
 <section id="entrada">
-  <img class="logo" src="logo.png?v=1.7" alt="Eduardo Braz · Digital Magic">
+  <img class="logo" src="logo.png?v=1.8" alt="Eduardo Braz · Digital Magic">
   <h1>Faça parte do show</h1>
   <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada, serve apenas para você participar da experiência.</p>
   <button id="btEntrar">PARTICIPAR</button>
@@ -84,10 +85,10 @@ p b{color:#fff}
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.7"></script>
+<script src="rede.js?v=1.8"></script>
 <script>
 (function(){
-var VERSAO = '1.7';
+var VERSAO = '1.8';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
@@ -288,6 +289,20 @@ function corClara(c){
   var r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
   return (r*299 + g*587 + b*114) / 1000 > 150;
 }
+// Maior tamanho de letra em que nenhuma palavra é cortada e o texto cabe na tela
+function ajustarTexto(){
+  var sp = $('txtIn'); if (!sp || $('txt').hidden) return;
+  var maxH = innerHeight * 0.8, lo = 12, hi = 600, el = $('txt');
+  while (hi - lo > 1) {
+    var mid = (lo + hi) >> 1;
+    el.style.fontSize = mid + 'px';
+    if (sp.scrollWidth <= sp.clientWidth + 1 && sp.offsetWidth <= innerWidth * 0.9 + 1 && sp.offsetHeight <= maxH) lo = mid; else hi = mid;
+  }
+  el.style.fontSize = lo + 'px';
+}
+window.addEventListener('resize', ajustarTexto);
+window.addEventListener('orientationchange', function(){ setTimeout(ajustarTexto, 300); });
+
 function atualizarTela(forcar){
   if (!entrou) return;
   var f = quadro(), luz = f.luz;
@@ -302,12 +317,10 @@ function atualizarTela(forcar){
     ultTxt = txt;
     var el = $('txt');
     if (txt) {
-      el.textContent = txt;
-      var n = Math.max(3, txt.length);
-      var fs = Math.min(innerWidth * 1.55 / Math.min(n, 12), innerHeight * 0.3, 220);
-      if (n > 12) fs = Math.max(30, Math.sqrt(innerWidth * innerHeight / n) * 0.95);
-      el.style.fontSize = Math.round(fs) + 'px';
+      if (!$('txtIn')) el.innerHTML = '<span id="txtIn"></span>';
+      $('txtIn').textContent = txt;
       el.hidden = false;
+      ajustarTexto();
     } else el.hidden = true;
   }
   if (txt) $('txt').style.color = corClara(bg) ? '#000' : '#fff';
