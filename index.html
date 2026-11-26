@@ -72,13 +72,15 @@ p b{color:#fff}
   <div class="linha"><span>Lanterna</span><span id="mLan"></span></div>
   <div class="linha"><span>Ajuste de relógio</span><span id="mRel"></span></div>
   <div class="linha"><span>Efeito atual</span><span id="mModo"></span></div>
+  <div class="linha"><span>Câmeras testadas</span><span id="mCam" style="font-size:12px;text-align:right;max-width:60%"></span></div>
+  <div class="linha"><span>Navegador</span><span id="mNav" style="font-size:12px;text-align:right;max-width:60%"></span></div>
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.0"></script>
+<script src="rede.js?v=1.1"></script>
 <script>
 (function(){
-var VERSAO = '1.0';
+var VERSAO = '1.1';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
@@ -161,27 +163,77 @@ function bombear(){
   }).then(function(){ lanOcupada = false; setTimeout(bombear, 0); });
 }
 
-function ligarCamera(){
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('sem camera'));
-  return navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: {facingMode: {ideal: 'environment'}, width: {ideal: 640}, height: {ideal: 480}}
-  }).then(function(st){
+var camEscolhida = null, diag = [];
+try { camEscolhida = localStorage.getItem('luzes_cam'); } catch(e) {}
+function espera(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+function abrirStream(restricao){
+  pararCamera(); // no Android não dá para abrir duas câmeras ao mesmo tempo
+  return navigator.mediaDevices.getUserMedia({audio: false, video: restricao}).then(function(st){
+    pararCamera();
     stream = st; track = st.getVideoTracks()[0];
     video.srcObject = st; var p = video.play(); if (p && p.catch) p.catch(function(){});
     lanEsta = null; lanOcupada = false; lanFalhas = 0;
     track.addEventListener('ended', function(){ lanEsta = null; });
     track.addEventListener('unmute', function(){ lanEsta = null; bombear(); });
-    return verLanterna(0);
+    return st;
   });
 }
-function verLanterna(tentativa){
-  var caps = {};
-  try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch(e) {}
-  if (caps.torch || FORCAR_LANTERNA) { temLanterna = true; return Promise.resolve(true); }
-  if (tentativa >= 3) { temLanterna = false; return Promise.resolve(false); }
-  // no iPhone a informação às vezes só aparece depois que a câmera começa
-  return new Promise(function(ok){ setTimeout(function(){ ok(verLanterna(tentativa + 1)); }, 500); });
+// Lê se a câmera aberta tem lanterna (espera até ~2 s: em alguns aparelhos a informação demora)
+function temTorch(){
+  var n = 0;
+  function ver(){
+    var caps = {};
+    try { caps = track && track.getCapabilities ? track.getCapabilities() : {}; } catch(e) {}
+    if (caps.torch || FORCAR_LANTERNA) return Promise.resolve(true);
+    if (++n > 8) return Promise.resolve(false);
+    return espera(250).then(ver);
+  }
+  return ver();
+}
+function nomeCam(){ try { return (track && track.label) || 'câmera'; } catch(e) { return 'câmera'; } }
+function idCam(){ try { return track.getSettings().deviceId || ''; } catch(e) { return ''; } }
+function ligarCamera(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject(new Error('sem camera'));
+  diag = [];
+  var primeira = camEscolhida ? {deviceId: {exact: camEscolhida}} : {facingMode: {ideal: 'environment'}};
+  return abrirStream(primeira).catch(function(){
+    return abrirStream({facingMode: {ideal: 'environment'}});
+  }).then(temTorch).then(function(ok){
+    diag.push(nomeCam() + (ok ? ' ✓' : ' ✗'));
+    if (ok) return guardar();
+    // Celulares com várias câmeras traseiras (comum no Android): só uma delas tem a lanterna.
+    return navigator.mediaDevices.enumerateDevices().then(function(lista){
+      var testada = idCam();
+      var cams = lista.filter(function(d){ return d.kind === 'videoinput' && d.deviceId && d.deviceId !== testada; });
+      cams.sort(function(a, b){ return pesoCam(b.label) - pesoCam(a.label); });
+      cams = cams.slice(0, 6);
+      var i = 0;
+      function proxima(){
+        if (i >= cams.length) { temLanterna = false; return false; }
+        var c = cams[i++];
+        return abrirStream({deviceId: {exact: c.deviceId}}).then(temTorch).then(function(ok){
+          diag.push((c.label || 'câmera ' + i) + (ok ? ' ✓' : ' ✗'));
+          return ok ? guardar() : proxima();
+        }, function(){ diag.push((c.label || 'câmera ' + i) + ' (erro)'); return proxima(); });
+      }
+      return proxima();
+    });
+  });
+}
+function pesoCam(l){
+  l = (l || '').toLowerCase();
+  if (/front|frontal|user|facetime/.test(l)) return -5;
+  var p = 0;
+  if (/back|rear|traseira|environment/.test(l)) p += 3;
+  if (/ 0,|camera 0|câmera 0/.test(l)) p += 2;
+  if (/ultra|wide|tele|macro|depth/.test(l)) p -= 1;
+  return p;
+}
+function guardar(){
+  temLanterna = true;
+  camEscolhida = idCam();
+  try { if (camEscolhida) localStorage.setItem('luzes_cam', camEscolhida); } catch(e) {}
+  return true;
 }
 function pararCamera(){
   if (stream) stream.getTracks().forEach(function(t){ try { t.stop(); } catch(e) {} });
@@ -268,6 +320,12 @@ $('btVoltar').addEventListener('click', function(){
 });
 
 /* ---------- menu (dois dedos para baixo) ---------- */
+function navegador(){
+  var u = navigator.userAgent, m;
+  var b = /SamsungBrowser\/([\d.]+)/.test(u) ? 'Samsung Internet' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox' : /Instagram|FBAN|FBAV|WhatsApp/.test(u) ? 'Navegador de app' : /Safari/.test(u) ? 'Safari' : 'Outro';
+  var so = (m = u.match(/Android ([\d.]+)/)) ? 'Android ' + m[1] : (m = u.match(/OS (\d+)_(\d+)/)) ? (/iPad/.test(u) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(u)) ? 'iPadOS ' : 'iOS ') + m[1] + '.' + m[2] : '';
+  return b + (so ? ' · ' + so : '');
+}
 function atualizarMenu(){
   $('mVer').textContent = 'v' + VERSAO;
   $('mSala').textContent = SALA;
@@ -275,6 +333,8 @@ function atualizarMenu(){
   $('mLan').textContent = !entrou ? '—' : (temLanterna ? 'Sim' : 'Não (usa a tela)');
   $('mRel').textContent = (offset >= 0 ? '+' : '') + Math.round(offset) + ' ms';
   $('mModo').textContent = NOMES[est.mode] || est.mode;
+  $('mCam').textContent = diag.length ? diag.join(' · ') : '—';
+  $('mNav').textContent = navegador();
 }
 gestoDoisDedos(function(){ atualizarMenu(); $('menu').hidden = false; });
 $('btFecharMenu').addEventListener('click', function(){ $('menu').hidden = true; });
