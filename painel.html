@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.0">
-<link rel="icon" type="image/png" href="favicon.png?v=2.0">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.1">
+<link rel="icon" type="image/png" href="favicon.png?v=2.1">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -61,6 +61,7 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
 .rodape .bt{font-size:15px}
 #aviso{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#00E5FF;color:#00151a;font-weight:700;padding:10px 18px;border-radius:22px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
 #aviso.erro{background:#ff2a2a;color:#fff}
+#novaVer{position:fixed;left:12px;right:12px;top:calc(8px + env(safe-area-inset-top));z-index:20;background:#ffd400;color:#1a1400;font-weight:800;font-size:15px;padding:14px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
 .tela{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(24px + env(safe-area-inset-top)) 22px calc(24px + env(safe-area-inset-bottom))}
 #qr{background:#000;text-align:center}
 #qr .qrimg{background:#fff;padding:14px;border-radius:18px;width:min(82vw,62vh);aspect-ratio:1;display:flex;align-items:center;justify-content:center}
@@ -142,6 +143,7 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
 </div>
 
 <div id="aviso"></div>
+<button id="novaVer" hidden></button>
 
 <section class="tela" id="qr" hidden>
   <h2>Aponte a câmera ✨</h2>
@@ -171,10 +173,10 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=2.0"></script>
+<script src="rede.js?v=2.1"></script>
 <script>
 (function(){
-var VERSAO = '2.0';
+var VERSAO = '2.1';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -303,6 +305,7 @@ $('bTeste').addEventListener('click', function(){
 $('bTxt').addEventListener('click', function(){ enviar({txt: $('txt').value.trim()}, 'Mensagem enviada'); $('txt').blur(); });
 $('txt').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('bTxt').click(); });
 $('bLimpa').addEventListener('click', function(){ $('txt').value = ''; enviar({txt: ''}, 'Mensagem apagada'); });
+$('novaVer').addEventListener('click', function(){ atualizarPainel(); });
 $('bFim').addEventListener('click', function(){ $('txt').value = ''; enviar({mode: 'fim', txt: ''}, 'Show encerrado: agradecimento na tela'); });
 
 $('bQR').addEventListener('click', function(){
@@ -450,11 +453,21 @@ $('mInjTestar').addEventListener('click', function(){
 });
 
 aoVoltar(rede);
-// confere se o Safari não está usando uma versão antiga guardada do painel
-fetch(location.pathname + '?checar=' + Date.now(), {cache: 'no-store'}).then(function(r){ return r.text(); }).then(function(t){
-  var m = t.match(/var VERSAO = '([\d.]+)'/);
-  if (m && m[1] !== VERSAO && q.get('u') !== m[1]) { var u = new URL(location.href); u.searchParams.set('u', m[1]); location.replace(u.href); }
-}).catch(function(){});
+// confere se existe versão nova do painel: ao abrir, a cada minuto e ao voltar para o Safari
+var inicio = true;
+function checarVersao(){
+  fetch(location.pathname + '?checar=' + Date.now(), {cache: 'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+    var m = t.match(/var VERSAO = '([\d.]+)'/);
+    if (!m || m[1] === VERSAO || q.get('u') === m[1]) return;
+    if (inicio) { atualizarPainel(m[1]); return; }
+    $('novaVer').textContent = 'Nova versão ' + m[1] + ' disponível · toque para atualizar';
+    $('novaVer').hidden = false;
+  }).catch(function(){}).then(function(){ inicio = false; });
+}
+function atualizarPainel(v){ var u = new URL(location.href); u.searchParams.set('u', v || Date.now()); location.replace(u.href); }
+checarVersao();
+setInterval(checarVersao, 60000);
+document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'visible') checarVersao(); });
 marcar();
 window.__painel = {est: est, sala: SALA, rede: rede};
 })();
