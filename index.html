@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.6">
-<link rel="icon" type="image/png" href="favicon.png?v=1.6">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.7">
+<link rel="icon" type="image/png" href="favicon.png?v=1.7">
 <title>Eduardo Braz · Digital Magic</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -43,7 +43,7 @@ p b{color:#fff}
 <video id="cam" playsinline muted autoplay></video>
 
 <section id="entrada">
-  <img class="logo" src="logo.png?v=1.6" alt="Eduardo Braz · Digital Magic">
+  <img class="logo" src="logo.png?v=1.7" alt="Eduardo Braz · Digital Magic">
   <h1>Faça parte do show</h1>
   <p>Toque em <b>Participar</b> e <b>permita o uso da câmera</b>. Ela não grava nem envia nada, serve apenas para você participar da experiência.</p>
   <button id="btEntrar">PARTICIPAR</button>
@@ -64,6 +64,12 @@ p b{color:#fff}
   <button id="btVoltar">VOLTAR PARA O SHOW</button>
 </section>
 
+<section id="atualizar" hidden style="z-index:8;background:#000">
+  <h2 style="font-size:23px;font-weight:800;margin-bottom:12px">Nova versão do show</h2>
+  <p>Toque no botão para atualizar e depois em <b>Participar</b> de novo.</p>
+  <button id="btAtualizar" style="margin-top:24px;font:inherit;font-size:19px;font-weight:800;color:#00151a;background:#00E5FF;border:0;border-radius:40px;padding:19px 40px">ATUALIZAR</button>
+</section>
+
 <section id="menu" hidden>
   <h3>Luzes da Plateia</h3>
   <div class="linha"><span>Versão</span><span id="mVer"></span></div>
@@ -72,15 +78,16 @@ p b{color:#fff}
   <div class="linha"><span>Lanterna</span><span id="mLan"></span></div>
   <div class="linha"><span>Ajuste de relógio</span><span id="mRel"></span></div>
   <div class="linha"><span>Efeito atual</span><span id="mModo"></span></div>
+  <div class="linha"><span>Último comando</span><span id="mUlt"></span></div>
   <div class="linha"><span>Câmeras testadas</span><span id="mCam" style="font-size:12px;text-align:right;max-width:60%"></span></div>
   <div class="linha"><span>Navegador</span><span id="mNav" style="font-size:12px;text-align:right;max-width:60%"></span></div>
   <button id="btFecharMenu">Fechar</button>
 </section>
 
-<script src="rede.js?v=1.6"></script>
+<script src="rede.js?v=1.7"></script>
 <script>
 (function(){
-var VERSAO = '1.6';
+var VERSAO = '1.7';
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
 var SALA = (q.get('s') || 'SHOW').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'SHOW';
@@ -97,7 +104,22 @@ var est = {mode:'off', sent:0, at:0, speed:500, color:'auto', txt:'', dur:4};
 var anterior = est;
 var entrou = false, temLanterna = false, lanternaAntes = false;
 var stream = null, track = null, video = $('cam');
-var amostras = [], offset = 0;
+var amostras = [], offset = 0, ultCmd = null;
+function verMaior(a, b){
+  a = String(a).split('.').map(Number); b = String(b).split('.').map(Number);
+  for (var i = 0; i < Math.max(a.length, b.length); i++) { var x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; }
+  return false;
+}
+function recarregar(nova){
+  var u = new URL(location.href); u.searchParams.set('u', nova || Date.now()); location.replace(u.href);
+}
+// Ao abrir, confere se o Safari não está mostrando uma versão antiga guardada
+fetch(location.pathname + '?checar=' + Date.now(), {cache: 'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+  var m = t.match(/var VERSAO = '([\d.]+)'/);
+  if (m && verMaior(m[1], VERSAO) && q.get('u') !== m[1]) {
+    if (!entrou) recarregar(m[1]); else $('atualizar').hidden = false;
+  }
+}).catch(function(){});
 
 /* ---------- rede ---------- */
 var rede = Rede(SRV, function(tp, txt, retido){
@@ -106,7 +128,9 @@ var rede = Rede(SRV, function(tp, txt, retido){
     var m; try { m = JSON.parse(txt); } catch(e) { return; }
     if (!m || !m.sent) return;
     if (!retido) amostra(m.sent);
+    if (m.v && verMaior(m.v, VERSAO)) $('atualizar').hidden = false;   // painel mais novo que esta página
     if (m.sent <= est.sent) return;          // mesma mensagem por outro servidor, ou mais antiga
+    ultCmd = {quando: Date.now(), modo: m.mode};
     anterior = est; est = m;
     atualizarTela(true);
   }
@@ -176,9 +200,15 @@ function bombear(){
 var camEscolhida = null, diag = [];
 try { camEscolhida = localStorage.getItem('luzes_cam'); } catch(e) {}
 function espera(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+function limite(p, ms){
+  return new Promise(function(ok, falha){
+    var t = setTimeout(function(){ falha(new Error('demorou')); }, ms);
+    p.then(function(v){ clearTimeout(t); ok(v); }, function(e){ clearTimeout(t); falha(e); });
+  });
+}
 function abrirStream(restricao){
   pararCamera(); // no Android não dá para abrir duas câmeras ao mesmo tempo
-  return navigator.mediaDevices.getUserMedia({audio: false, video: restricao}).then(function(st){
+  return limite(navigator.mediaDevices.getUserMedia({audio: false, video: restricao}), 6000).then(function(st){
     pararCamera();
     stream = st; track = st.getVideoTracks()[0];
     video.srcObject = st; var p = video.play(); if (p && p.catch) p.catch(function(){});
@@ -214,9 +244,9 @@ function ligarCamera(){
     // Celulares com várias câmeras traseiras (comum no Android): só uma delas tem a lanterna.
     return navigator.mediaDevices.enumerateDevices().then(function(lista){
       var testada = idCam();
-      var cams = lista.filter(function(d){ return d.kind === 'videoinput' && d.deviceId && d.deviceId !== testada; });
+      var cams = lista.filter(function(d){ return d.kind === 'videoinput' && d.deviceId && d.deviceId !== testada && pesoCam(d.label) > -5; });
       cams.sort(function(a, b){ return pesoCam(b.label) - pesoCam(a.label); });
-      cams = cams.slice(0, 6);
+      cams = cams.slice(0, 4);
       var i = 0;
       function proxima(){
         if (i >= cams.length) { temLanterna = false; return false; }
@@ -298,12 +328,15 @@ function pedirWake(){
 $('btEntrar').addEventListener('click', function(){
   var bt = this; bt.disabled = true; bt.textContent = 'CONECTANDO…';
   pedirWake();
+  var decidido = false;
+  var tLim = setTimeout(function(){ if (!decidido) { decidido = true; entrar(temLanterna); } }, 9000);
   ligarCamera().then(function(ok){
     lanternaAntes = ok;
     if (!ok) pararCamera();
-    entrar(ok);
+    if (!decidido) { decidido = true; clearTimeout(tLim); entrar(ok); } else atualizarMenu();
   }).catch(function(){
-    temLanterna = false; lanternaAntes = false; entrar(false);
+    temLanterna = false; lanternaAntes = false; pararCamera();
+    if (!decidido) { decidido = true; clearTimeout(tLim); entrar(false); }
   });
 });
 function entrar(comLanterna){
@@ -345,10 +378,12 @@ function atualizarMenu(){
   $('mLan').textContent = !entrou ? '—' : (temLanterna ? 'Sim' : 'Não (usa a tela)');
   $('mRel').textContent = (offset >= 0 ? '+' : '') + Math.round(offset) + ' ms';
   $('mModo').textContent = NOMES[est.mode] || est.mode;
+  $('mUlt').textContent = ultCmd ? (NOMES[ultCmd.modo] || ultCmd.modo) + ' · há ' + Math.round((Date.now() - ultCmd.quando) / 1000) + ' s' : 'nenhum ainda';
   $('mCam').textContent = diag.length ? diag.join(' · ') : '—';
   $('mNav').textContent = navegador();
 }
 gestoDoisDedos(function(){ atualizarMenu(); $('menu').hidden = false; });
+$('btAtualizar').addEventListener('click', function(){ recarregar(); });
 $('btFecharMenu').addEventListener('click', function(){ $('menu').hidden = true; });
 setInterval(function(){ if (!$('menu').hidden) atualizarMenu(); }, 1000);
 
