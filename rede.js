@@ -129,9 +129,9 @@
 
   // Servidor próprio (EMQX Cloud). Enquanto o endereço estiver vazio, só os públicos são usados.
   window.SERVIDOR_PROPRIO = {
-    url: '',                 // ex.: 'wss://xxxxxxxx.ala.us-east-1.emqxsl.com:8084/mqtt'
+    url: 'wss://r19fa68d.ala.us-east-1.emqxsl.com:8084/mqtt',   // EMQX Cloud Serverless do Eduardo
     userPlateia: 'plateia',
-    passPlateia: '',
+    passPlateia: '123456',
     userPainel: 'painel'     // a senha do painel fica só no iPhone do Eduardo (menu de ajustes)
   };
   // papel: 'plateia' ou 'painel'
