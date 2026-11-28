@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.2">
-<link rel="icon" type="image/png" href="favicon.png?v=2.2">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.3">
+<link rel="icon" type="image/png" href="favicon.png?v=2.3">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -158,6 +158,8 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <div class="linha"><span>Código da sala</span><span><input id="mSala" maxlength="8"></span></div>
   <div class="linha"><span>Link da plateia</span><span id="mLink" style="font-size:12px;word-break:break-all"></span></div>
   <div class="linha"><span>Servidores</span><span id="mSrv"></span></div>
+  <div class="linha"><span>Senha do painel (servidor próprio)</span><span><input id="mSenha" type="password" autocomplete="off" style="letter-spacing:0;width:130px;text-transform:none"></span></div>
+  <div class="linha"><span>Servidor próprio</span><span id="mProprio" style="font-size:12px;max-width:60%"></span></div>
   <div class="linha"><span>Antecedência do comando</span><span id="mAtr"></span></div>
   <div class="linha"><span>ID do Inject</span><span><input id="mInjId" inputmode="numeric" maxlength="8"></span></div>
   <div class="linha"><span>Quando chegar do Inject</span><span><select id="mInjModo"><option value="auto">Revelar sozinho</option><option value="manual">Só preencher</option></select></span></div>
@@ -175,14 +177,14 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=2.2"></script>
+<script src="rede.js?v=2.3"></script>
 <script>
 (function(){
-var VERSAO = '2.2';
+var VERSAO = '2.3';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
-var SRV = q.get('srv') ? q.get('srv').split(',') : SERVIDORES_PADRAO;
+var SRV = q.get('srv') ? q.get('srv').split(',') : listaServidores('painel');
 
 function novaSala(){
   var L = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
@@ -452,6 +454,9 @@ function abrirMenu(){
   $('mLink').textContent = linkPlateia();
   $('mAtr').textContent = ATRASO + ' ms';
   $('mInjId').value = INJ.id; $('mInjModo').value = INJ.modo;
+  try { $('mSenha').value = localStorage.getItem('luzes_senha') || ''; } catch(e) {}
+  var cp = rede.conexoes.filter(function(c){ return c.proprio; })[0];
+  $('mProprio').textContent = !SERVIDOR_PROPRIO.url ? 'não configurado' : (!cp ? 'falta a senha do painel' : (cp.ok ? 'conectado ✓' : 'conectando… (confira a senha)'));
   $('mHydra').textContent = linkHydra() + 'PALAVRA';
   pintarServidores();
   $('menu').hidden = false;
@@ -473,6 +478,10 @@ $('mCopiar').addEventListener('click', function(){
 $('mAbrir').addEventListener('click', function(){ window.open(linkPlateia(), '_blank'); });
 $('mInjId').addEventListener('change', function(){ var v = this.value.replace(/\D/g, ''); if (v) { INJ.id = v; injVia = null; salvarInj(); aviso('ID do Inject salvo'); } });
 $('mInjModo').addEventListener('change', function(){ INJ.modo = this.value; salvarInj(); aviso(INJ.modo === 'auto' ? 'Vai revelar sozinho' : 'Só vai preencher'); });
+$('mSenha').addEventListener('change', function(){
+  try { localStorage.setItem('luzes_senha', this.value.trim()); } catch(e) {}
+  aviso('Senha salva. Recarregando…'); setTimeout(function(){ location.reload(); }, 800);
+});
 $('mHydraCopiar').addEventListener('click', function(){
   var l = linkHydra();
   (navigator.clipboard ? navigator.clipboard.writeText(l) : Promise.reject()).then(function(){ aviso('Link do Hydra copiado'); }, function(){ aviso(l); });

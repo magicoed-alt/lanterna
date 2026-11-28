@@ -21,8 +21,10 @@
   }
   function juntar(a, b) { var o = new Uint8Array(a.length + b.length); o.set(a, 0); o.set(b, a.length); return o; }
 
-  function Conexao(url, aoMsg, aoEstado) {
-    this.url = url; this.aoMsg = aoMsg; this.aoEstado = aoEstado || function () {};
+  function Conexao(srv, aoMsg, aoEstado) {
+    if (typeof srv === 'string') srv = {url: srv};
+    this.url = srv.url; this.user = srv.user || ''; this.pass = srv.pass || ''; this.proprio = !!srv.proprio;
+    this.aoMsg = aoMsg; this.aoEstado = aoEstado || function () {};
     this.topicos = []; this.ok = false; this.buf = new Uint8Array(0);
     this.espera = 800; this.pid = 1; this.ws = null;
     this.id = 'ed' + Math.random().toString(36).slice(2, 12);
@@ -35,9 +37,13 @@
     s.ws = ws; ws.binaryType = 'arraybuffer'; s.buf = new Uint8Array(0);
     ws.onopen = function () {
       if (ws !== s.ws) return;
-      // CONNECT: MQTT 3.1.1, sessão limpa, keepalive 20 s
-      var vh = juntar(strBytes('MQTT'), new Uint8Array([4, 2, 0, 20]));
-      s.enviar(pacote(0x10, [vh, strBytes(s.id)]));
+      // CONNECT: MQTT 3.1.1, sessão limpa, keepalive 20 s (+ usuário e senha no servidor próprio)
+      var flags = 2 | (s.user ? 0x80 : 0) | (s.user && s.pass ? 0x40 : 0);
+      var vh = juntar(strBytes('MQTT'), new Uint8Array([4, flags, 0, 20]));
+      var partes = [vh, strBytes(s.id)];
+      if (s.user) partes.push(strBytes(s.user));
+      if (s.user && s.pass) partes.push(strBytes(s.pass));
+      s.enviar(pacote(0x10, partes));
     };
     ws.onmessage = function (e) {
       if (ws !== s.ws) return;
@@ -119,6 +125,25 @@
   Conexao.prototype.publicar = function (tp, txt, reter) {
     if (!this.ok) return false;
     return this.enviar(pacote(reter ? 0x31 : 0x30, [strBytes(tp), enc.encode(txt)]));
+  };
+
+  // Servidor próprio (EMQX Cloud). Enquanto o endereço estiver vazio, só os públicos são usados.
+  window.SERVIDOR_PROPRIO = {
+    url: '',                 // ex.: 'wss://xxxxxxxx.ala.us-east-1.emqxsl.com:8084/mqtt'
+    userPlateia: 'plateia',
+    passPlateia: '',
+    userPainel: 'painel'     // a senha do painel fica só no iPhone do Eduardo (menu de ajustes)
+  };
+  // papel: 'plateia' ou 'painel'
+  window.listaServidores = function (papel) {
+    var lista = [], P = window.SERVIDOR_PROPRIO;
+    if (P.url) {
+      if (papel === 'painel') {
+        var senha = ''; try { senha = localStorage.getItem('luzes_senha') || ''; } catch (e) {}
+        if (senha) lista.push({url: P.url, user: P.userPainel, pass: senha, proprio: true});
+      } else lista.push({url: P.url, user: P.userPlateia, pass: P.passPlateia, proprio: true});
+    }
+    return lista.concat(window.SERVIDORES_PADRAO);
   };
 
   // Vários servidores ao mesmo tempo: se um cair, os outros continuam.
