@@ -50,9 +50,13 @@
       s.ultRx = Date.now();
       s.buf = juntar(s.buf, new Uint8Array(e.data)); s.ler();
     };
-    ws.onclose = ws.onerror = function () { if (ws === s.ws) s.cair(); };
+    ws.onclose = ws.onerror = function (ev) {
+      if (ws !== s.ws) return;
+      if (!s.ok && !s.motivo) s.motivo = (ev && ev.type === 'error') ? 'sem resposta do servidor (endereço ou servidor parado)' : 'conexão fechada pelo servidor';
+      s.cair();
+    };
     clearTimeout(s.tConn);
-    s.tConn = setTimeout(function () { if (!s.ok && ws === s.ws) s.cair(); }, 8000);
+    s.tConn = setTimeout(function () { if (!s.ok && ws === s.ws) { s.motivo = s.motivo || 'demorou demais para responder'; s.cair(); } }, 8000);
   };
   Conexao.prototype.cair = function () {
     var s = this;
@@ -92,7 +96,11 @@
     var s = this, t = tipo >> 4;
     if (t === 2) { // CONNACK
       clearTimeout(s.tConn);
-      if (c[1] !== 0) { s.cair(); return; }
+      if (c[1] !== 0) {
+        s.motivo = ({1: 'versão recusada', 2: 'ID recusado', 3: 'servidor indisponível', 4: 'usuário ou senha errados', 5: 'não autorizado (usuário ou senha)'})[c[1]] || ('recusado, código ' + c[1]);
+        s.cair(); return;
+      }
+      s.motivo = '';
       s.ok = true; s.espera = 800; s.aoEstado(true);
       s.topicos.forEach(function (tp) { s.mandarInscricao(tp); });
       clearInterval(s.tPing);

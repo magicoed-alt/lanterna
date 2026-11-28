@@ -7,8 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Luzes">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.4">
-<link rel="icon" type="image/png" href="favicon.png?v=2.4">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2.5">
+<link rel="icon" type="image/png" href="favicon.png?v=2.5">
 <title>Luzes da Plateia – Painel</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -177,10 +177,10 @@ button{font:inherit;color:#fff;border:0;cursor:pointer}
   <p class="dica">Mudar a sala troca o QR code: quem entrou com o código antigo deixa de receber os comandos. Use uma sala por show se quiser separar as plateias.</p>
 </section>
 
-<script src="rede.js?v=2.4"></script>
+<script src="rede.js?v=2.5"></script>
 <script>
 (function(){
-var VERSAO = '2.4';
+var VERSAO = '2.5';
 var ATRASO = 450; // ms entre apertar o botão e todos executarem juntos
 var $ = function(id){ return document.getElementById(id); };
 var q = new URLSearchParams(location.search);
@@ -456,12 +456,18 @@ function abrirMenu(){
   $('mInjId').value = INJ.id; $('mInjModo').value = INJ.modo;
   try { $('mSenha').value = localStorage.getItem('luzes_senha') || ''; } catch(e) {}
   var cp = rede.conexoes.filter(function(c){ return c.proprio; })[0];
-  $('mProprio').textContent = !SERVIDOR_PROPRIO.url ? 'não configurado' : (!cp ? 'falta a senha do painel' : (cp.ok ? 'conectado ✓' : 'conectando… (confira a senha)'));
+  $('mProprio').textContent = !SERVIDOR_PROPRIO.url ? 'não configurado' : (!cp ? 'falta a senha do painel' : (cp.ok ? 'conectado ✓' : 'não conectou: ' + (cp.motivo || 'tentando…')));
   $('mHydra').textContent = linkHydra() + 'PALAVRA';
   pintarServidores();
   $('menu').hidden = false;
 }
 gestoDoisDedos(abrirMenu);
+setInterval(function(){
+  if ($('menu').hidden) return;
+  var cp = rede.conexoes.filter(function(c){ return c.proprio; })[0];
+  if (SERVIDOR_PROPRIO.url && cp) $('mProprio').textContent = cp.ok ? 'conectado ✓' : 'não conectou: ' + (cp.motivo || 'tentando…');
+  $('mSrv').textContent = rede.quantas() + ' de ' + SRV.length + ' conectados';
+}, 1000);
 $('mFechar').addEventListener('click', function(){ $('menu').hidden = true; });
 function trocarSala(s){
   s = (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
